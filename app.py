@@ -572,7 +572,7 @@ def main():
     # --- Mood Distribution Chart ---
     mood_distribution_fig = create_mood_distribution_chart(data, year)
     if mood_distribution_fig:
-        st.plotly_chart(mood_distribution_fig, use_container_width=True)
+        st.plotly_chart(mood_distribution_fig, use_container_width=True, key="mood_dist")
 
     # --- I. New Metrics and Stats ---
 
@@ -614,10 +614,10 @@ def main():
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown(f"**{year - 1}**")
-                st.plotly_chart(comparative_heatmaps[1], use_container_width=True)
+                st.plotly_chart(comparative_heatmaps[1], use_container_width=True, key="heatmap_prev")
             with col2:
                 st.markdown(f"**{year}**")
-                st.plotly_chart(comparative_heatmaps[0], use_container_width=True)
+                st.plotly_chart(comparative_heatmaps[0], use_container_width=True, key="heatmap_curr")
         else:
             st.write("Comparative heatmap not available.")
     else:
@@ -683,17 +683,17 @@ def main():
     with col1:
       emotions_fig = create_top_tags_bar_chart(top_tags['top_emotions'], "Emotions", f"Top Emotions - {year}", "#ff6b6b")
       if emotions_fig:
-          st.plotly_chart(emotions_fig, use_container_width=True)
+          st.plotly_chart(emotions_fig, use_container_width=True, key="emotions_bar")
 
     with col2:
         activities_fig = create_top_tags_bar_chart(top_tags['top_activities'], "Activities", f"Top Activities - {year}", "#4ecdc4")
         if activities_fig:
-            st.plotly_chart(activities_fig, use_container_width=True)
+            st.plotly_chart(activities_fig, use_container_width=True, key="activities_bar")
 
     with col3:
         despierto_fig = create_top_tags_bar_chart(top_tags['top_despiertos'], "Despierto", f"Top 'Despierto' - {year}", "#ffcc66")
         if despierto_fig:
-            st.plotly_chart(despierto_fig, use_container_width=True)
+            st.plotly_chart(despierto_fig, use_container_width=True, key="despierto_bar")
             
     # --- Mood Evolution Chart ---
     st.markdown("## 📈 Mood Evolution")
@@ -710,7 +710,7 @@ def main():
 
     mood_evolution_fig = create_mood_evolution_chart(data, year, selected_tag)
     if mood_evolution_fig:
-        st.plotly_chart(mood_evolution_fig, use_container_width=True)
+        st.plotly_chart(mood_evolution_fig, use_container_width=True, key="mood_evolution")
     else:
         st.write("Mood evolution chart not available for the selected tag.")
         
@@ -721,23 +721,23 @@ def main():
     with col1:
         radial_emotions_fig = create_radial_chart(top_tags['top_emotions'], f"Top Emotions - {year}", "#ff6b6b")
         if radial_emotions_fig:
-            st.plotly_chart(radial_emotions_fig, use_container_width=True)
+            st.plotly_chart(radial_emotions_fig, use_container_width=True, key="emotions_radial")
 
     with col2:
         radial_activities_fig = create_radial_chart(top_tags['top_activities'], f"Top Activities - {year}", "#4ecdc4")
         if radial_activities_fig:
-            st.plotly_chart(radial_activities_fig, use_container_width=True)
+            st.plotly_chart(radial_activities_fig, use_container_width=True, key="activities_radial")
             
     with col3:
         radial_despierto_fig = create_radial_chart(top_tags['top_despiertos'], f"Top 'Despierto' - {year}", "#ffcc66")
         if radial_despierto_fig:
-            st.plotly_chart(radial_despierto_fig, use_container_width=True)
+            st.plotly_chart(radial_despierto_fig, use_container_width=True, key="despierto_radial")
     
     # --- Calendar Heatmap ---
     st.markdown("## 🗓️ Mood Calendar Heatmap")
     heatmap_fig = create_calendar_heatmap(data, year)
     if heatmap_fig:
-        st.plotly_chart(heatmap_fig, use_container_width=True)
+        st.plotly_chart(heatmap_fig, use_container_width=True, key="calendar_heatmap")
     else:
         st.warning(f"No data to show on Mood Heatmap for: {year}")
 
