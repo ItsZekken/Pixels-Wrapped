@@ -59,23 +59,20 @@ def analyze_mood_data(data, year):
     max_mood = max(mood_scores)
     min_mood = min(mood_scores)
 
-    emotion_counts = Counter()
-    activity_counts = Counter()
-    despierto_counts = Counter()
+    tag_counts = {} # Dictionary to store tag counts by category
 
     for entry in filtered_data:
         if 'tags' in entry:
             for tag in entry['tags']:
-                if tag['type'] == "Emociones":
-                    emotion_counts.update(tag['entries'])
-                elif tag['type'] == "Actividades":
-                    activity_counts.update(tag['entries'])
-                elif tag['type'] == "despierto":
-                    despierto_counts.update(tag['entries'])
+                tag_type = tag['type']
+                if tag_type not in tag_counts:
+                    tag_counts[tag_type] = Counter()
+                tag_counts[tag_type].update(tag['entries'])
 
-    top_emotions = emotion_counts.most_common(5)
-    top_activities = activity_counts.most_common(5)
-    top_despiertos = despierto_counts.most_common(5)
+    top_tags_by_category = {}
+    for tag_type, counts in tag_counts.items():
+        top_tags_by_category[tag_type] = counts.most_common(5)
+
     
     notes = [entry['note'] for entry in filtered_data if 'note' in entry and entry['note']]
 
@@ -84,9 +81,7 @@ def analyze_mood_data(data, year):
         'max_mood': max_mood,
         'min_mood': min_mood,
     }, {
-        'top_emotions': top_emotions,
-        'top_activities': top_activities,
-        'top_despiertos': top_despiertos,
+        'top_tags_by_category': top_tags_by_category,
         'notes': notes,
         'all_data': filtered_data
     }
@@ -141,19 +136,17 @@ def compare_with_previous_year(data, year):
     
     current_year_tags = analyze_mood_data(data, year)[1]
     previous_year_tags = analyze_mood_data(data, year -1)[1]
-
+    
     if current_year_tags and previous_year_tags:
-        # Tag differences
-        current_emotions = Counter(dict(current_year_tags['top_emotions']))
-        previous_emotions = Counter(dict(previous_year_tags['top_emotions']))
-        emotion_diff = current_emotions - previous_emotions
-
-        current_activities = Counter(dict(current_year_tags['top_activities']))
-        previous_activities = Counter(dict(previous_year_tags['top_activities']))
-        activities_diff = current_activities - previous_activities
-        
-        comparison['emotion_differences'] = emotion_diff.most_common()
-        comparison['activity_differences'] = activities_diff.most_common()
+        comparison['tag_differences'] = {}
+        for tag_type in current_year_tags['top_tags_by_category'].keys():
+          
+            current_tags = Counter(dict(current_year_tags['top_tags_by_category'].get(tag_type, [])))
+            previous_tags = Counter(dict(previous_year_tags['top_tags_by_category'].get(tag_type, [])))
+            
+            tag_diff = current_tags - previous_tags
+            if tag_diff:
+                comparison['tag_differences'][tag_type] = tag_diff.most_common()
 
     return comparison
 
@@ -173,18 +166,17 @@ def calculate_tag_correlations(data, year):
 
     if not filtered_data:
         return None, None
-
-    # Convertir el set a una lista ordenada
-    all_tags = sorted(list(set(
-        tag_entry
-        for entry in filtered_data
-        if 'tags' in entry
-        for tag in entry['tags']
-        for tag_entry in tag['entries']
-    )))
+    
+    all_tags = set()
+    for entry in filtered_data:
+        if 'tags' in entry:
+            for tag in entry['tags']:
+                all_tags.update(tag['entries'])
 
     if not all_tags:
         return None, None
+    
+    all_tags = sorted(list(all_tags))
 
     # Crear el DataFrame con listas en lugar de sets
     tag_matrix = pd.DataFrame(0, index=all_tags, columns=all_tags)
@@ -296,8 +288,8 @@ def create_mood_evolution_chart(data, year, selected_tag=None):
         y=df['average_score'],
         mode='lines+markers',
         name='Mood Score',
-        marker=dict(color='#48d1cc', size=6),
-        line=dict(color='#48d1cc', width=1)
+        marker=dict(color='#175a77', size=6),
+        line=dict(color='#174c64', width=1)
     ))
 
     # Curva suavizada
@@ -309,7 +301,7 @@ def create_mood_evolution_chart(data, year, selected_tag=None):
         y=smoothed_scores,
         mode='lines',
         name='Smoothed Score',
-        line=dict(color='#ff6b6b', width=3)
+        line=dict(color='#48d1cc', width=3)
     ))
 
     # Línea de tendencia
@@ -320,7 +312,7 @@ def create_mood_evolution_chart(data, year, selected_tag=None):
         y=p(range(len(df))),
         mode='lines',
         name='Trend Line',
-        line=dict(color='#ffcc66', width=2, dash='dash')
+        line=dict(color='white', width=2, dash='dash')
     ))
 
     fig.update_layout(
@@ -552,7 +544,8 @@ def main():
 
     year = st.selectbox("**Select Year**", options=list(range(2020, 2025)), index=4)
 
-    mood_summary, top_tags = analyze_mood_data(data, year)
+    mood_summary, top_tags_and_data = analyze_mood_data(data, year)
+    top_tags = top_tags_and_data['top_tags_by_category']
 
     if not mood_summary and not top_tags:
         st.warning(f"😔 No data available for the selected year: {year}")
@@ -580,62 +573,61 @@ def main():
 
     # --- Streaks ---
     st.markdown("### 🏃 Streaks")
+    st.markdown("#### Discover your longest positive and negative streaks, and see how your current streak is going.")
     streaks = calculate_streaks(data, year)
     if streaks:
         col1, col2, col3 = st.columns(3)
-        col1.metric("Longest Positive Streak", f"{streaks['longest_positive_streak']} days")
-        col2.metric("Longest Negative Streak", f"{streaks['longest_negative_streak']} days")
-        col3.metric(f"Current Streak ({streaks['current_streak_type'].capitalize()})", f"{streaks['current_streak']} days")
+        with col1:
+            st.markdown(
+                f"""
+                <div style='border: 2px solid #008080; border-radius: 10px; padding: 10px; margin-bottom: 20px;'>
+                    <h4 style='text-align: center; color: #008080;'>Longest Positive Streak</h4>
+                    <div style='display: flex; justify-content: center; align-items: center; height: 80px;'>
+                        <span style='font-size: 2.5em; color: white; font-weight: bold;'>{streaks['longest_positive_streak']} days</span>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        with col2:
+            st.markdown(
+                f"""
+                <div style='border: 2px solid #ff6b6b; border-radius: 10px; padding: 10px; margin-bottom: 20px;'>
+                    <h4 style='text-align: center; color: #ff6b6b;'>Longest Negative Streak</h4>
+                    <div style='display: flex; justify-content: center; align-items: center; height: 80px;'>
+                        <span style='font-size: 2.5em; color: white; font-weight: bold;'>{streaks['longest_negative_streak']} days</span>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        with col3:
+            st.markdown(
+                f"""
+                <div style='border: 2px solid #ffcc66; border-radius: 10px; padding: 10px; margin-bottom: 20px;'>
+                    <h4 style='text-align: center; color: #ffcc66;'>Current Streak</h4>
+                    <div style='display: flex; justify-content: center; align-items: center; height: 80px;'>
+                        <span style='font-size: 2.5em; color: white; font-weight: bold;'>{streaks['current_streak']} days</span>
+                    </div>
+                    <p style='text-align: center; color: white;'>
+                        <small>
+                            This streak is currently: <span style='color: #ffcc66; font-weight: bold;'>{streaks['current_streak_type'].capitalize()}</span>
+                        </small>
+                    </p>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
     else:
-        st.write("No streaks data available.")
+        st.info("No streaks data available.", icon="ℹ️")
 
-    # --- Comparison with Previous Year ---
-    st.markdown("### 🔄🔄 Comparison with Previous Year")
-    comparison = compare_with_previous_year(data, year)
-    if comparison:
-        col1, col2 = st.columns(2)
-        col1.metric("Average Mood Change", f"{comparison['average_mood_change']:.2f}")
-        
-        if comparison['emotion_differences']:
-            with col2:
-                st.markdown("**Emotion Differences**:")
-                for emotion, diff in comparison['emotion_differences']:
-                    st.write(f"{emotion}: {diff}")
-
-        if comparison['activity_differences']:
-                st.markdown("**Activity Differences:**")
-                for activity, diff in comparison['activity_differences']:
-                    st.write(f"{activity}: {diff}")
-
-        # Comparative Heatmaps
-        comparative_heatmaps = create_comparative_heatmap(data, year)
-        if comparative_heatmaps:
-            st.markdown("#### Heatmap Comparison")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown(f"**{year - 1}**")
-                st.plotly_chart(comparative_heatmaps[1], use_container_width=True, key="heatmap_prev")
-            with col2:
-                st.markdown(f"**{year}**")
-                st.plotly_chart(comparative_heatmaps[0], use_container_width=True, key="heatmap_curr")
-        else:
-            st.write("Comparative heatmap not available.")
+    # --- Calendar Heatmap ---
+    st.markdown("## 🗓️ Mood Calendar Heatmap")
+    heatmap_fig = create_calendar_heatmap(data, year)
+    if heatmap_fig:
+        st.plotly_chart(heatmap_fig, use_container_width=True, key="calendar_heatmap")
     else:
-        st.write("Comparison with previous year not available.")
-
-    # --- Tag Correlations ---
-    st.markdown("### 🔗 Tag Correlations")
-    tag_matrix, relevant_probs = calculate_tag_correlations(data, year)
-    
-    if tag_matrix is not None and relevant_probs is not None:
-        st.markdown("#### Correlation Matrix")
-        st.dataframe(tag_matrix)
-
-        st.markdown("#### Conditional Probabilities (P(Tag2|Tag1) >= 0.4)")
-        for prob, value in relevant_probs.items():
-            st.write(f"{prob}: {value:.2f}")
-    else:
-        st.write("Tag correlation analysis not available.")
+        st.warning(f"No data to show on Mood Heatmap for: {year}")
 
     # --- Notes Sentiment Analysis ---
     st.markdown("### 📝 Notes Analysis")
@@ -678,29 +670,25 @@ def main():
 
     # --- Top Tags ---
     st.markdown("## 🔥 Top Tags")
-    col1, col2, col3 = st.columns(3)
 
-    with col1:
-      emotions_fig = create_top_tags_bar_chart(top_tags['top_emotions'], "Emotions", f"Top Emotions - {year}", "#ff6b6b")
-      if emotions_fig:
-          st.plotly_chart(emotions_fig, use_container_width=True, key="emotions_bar")
+    num_tag_types = len(top_tags)
+    cols = st.columns(num_tag_types)
+    
+    color_palette = ["#ff6b6b", "#4ecdc4", "#ffcc66", "#f787be", "#66cc99", "#008080"]
 
-    with col2:
-        activities_fig = create_top_tags_bar_chart(top_tags['top_activities'], "Activities", f"Top Activities - {year}", "#4ecdc4")
-        if activities_fig:
-            st.plotly_chart(activities_fig, use_container_width=True, key="activities_bar")
+    for i, (tag_type, tag_data) in enumerate(top_tags.items()):
+        with cols[i]:
+            color = color_palette[i % len(color_palette)]
+            tags_fig = create_top_tags_bar_chart(tag_data, tag_type, f"Top {tag_type} - {year}", color)
+            if tags_fig:
+                st.plotly_chart(tags_fig, use_container_width=True, key=f"{tag_type}_bar")
 
-    with col3:
-        despierto_fig = create_top_tags_bar_chart(top_tags['top_despiertos'], "Despierto", f"Top 'Despierto' - {year}", "#ffcc66")
-        if despierto_fig:
-            st.plotly_chart(despierto_fig, use_container_width=True, key="despierto_bar")
-            
     # --- Mood Evolution Chart ---
     st.markdown("## 📈 Mood Evolution")
 
     # Get all unique tags
     all_tags = set()
-    for entry in top_tags['all_data']:
+    for entry in top_tags_and_data['all_data']:
         if 'tags' in entry:
             for tag in entry['tags']:
                 all_tags.update(tag['entries'])
@@ -717,34 +705,38 @@ def main():
     # --- Radial Chart for Top Tags ---
     st.markdown("## 🥏 Radial Charts for Top Tags")
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        radial_emotions_fig = create_radial_chart(top_tags['top_emotions'], f"Top Emotions - {year}", "#ff6b6b")
-        if radial_emotions_fig:
-            st.plotly_chart(radial_emotions_fig, use_container_width=True, key="emotions_radial")
+    num_tag_types = len(top_tags)
+    cols = st.columns(num_tag_types)
 
-    with col2:
-        radial_activities_fig = create_radial_chart(top_tags['top_activities'], f"Top Activities - {year}", "#4ecdc4")
-        if radial_activities_fig:
-            st.plotly_chart(radial_activities_fig, use_container_width=True, key="activities_radial")
+    color_palette = ["#ff6b6b", "#4ecdc4", "#ffcc66", "#f787be", "#66cc99", "#008080"]
+
+    for i, (tag_type, tag_data) in enumerate(top_tags.items()):
+        with cols[i]:
+            color = color_palette[i % len(color_palette)]
             
-    with col3:
-        radial_despierto_fig = create_radial_chart(top_tags['top_despiertos'], f"Top 'Despierto' - {year}", "#ffcc66")
-        if radial_despierto_fig:
-            st.plotly_chart(radial_despierto_fig, use_container_width=True, key="despierto_radial")
-    
-    # --- Calendar Heatmap ---
-    st.markdown("## 🗓️ Mood Calendar Heatmap")
-    heatmap_fig = create_calendar_heatmap(data, year)
-    if heatmap_fig:
-        st.plotly_chart(heatmap_fig, use_container_width=True, key="calendar_heatmap")
-    else:
-        st.warning(f"No data to show on Mood Heatmap for: {year}")
+            radial_fig = create_radial_chart(tag_data, f"Top {tag_type} - {year}", color)
+            if radial_fig:
+                radial_fig.update_layout(
+                    plot_bgcolor="gray",
+                    font=dict(color="white"),
+                    polar=dict(
+                        bgcolor="#1a1a1a",
+                        radialaxis=dict(
+                            tickfont=dict(color="lightgray"),
+                            gridcolor="gray"
+                        ),
+                        angularaxis=dict(
+                            tickfont=dict(color="lightgray"),
+                            gridcolor="gray"
+                        )
+                    )
+                )
+                st.plotly_chart(radial_fig, use_container_width=True, key=f"{tag_type}_radial")
 
     # --- Notes Section ---
-    if top_tags['notes']:
+    if top_tags_and_data['notes']:
         with st.expander("📖 A glimpse into your notes..."):
-            for note in top_tags['notes'][:5]:  # Display the first 5 notes
+            for note in top_tags_and_data['notes'][:5]:  # Display the first 5 notes
                 st.write(note)
 
     st.markdown("---")
