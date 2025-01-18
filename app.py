@@ -486,6 +486,91 @@ def create_top_tags_bar_chart(tag_data, tag_type, title, color):
     
     return fig
 
+def create_correlation_network_graph(relevant_probs, title):
+    """
+    Creates a network graph showing correlations between tags.
+
+    Args:
+        relevant_probs (dict): A dictionary containing relevant conditional probabilities.
+        title (str): The title of the graph.
+
+    Returns:
+        plotly.graph_objects.Figure: The network graph figure.
+    """
+    if not relevant_probs:
+        return None
+
+    # Create a graph from the relevant probabilities
+    graph = nx.Graph()
+    for prob, value in relevant_probs.items():
+        tag1, tag2 = prob[2:-1].split('|')  # Extract tags from probability string
+        graph.add_edge(tag1, tag2, weight=value)
+
+    # Calculate node positions using a spring layout for better visualization
+    pos = nx.spring_layout(graph, seed=42)
+
+    # Create edge traces
+    edge_x = []
+    edge_y = []
+    edge_weights = []
+    for edge in graph.edges():
+        x0, y0 = pos[edge[0]]
+        x1, y1 = pos[edge[1]]
+        edge_x.extend([x0, x1, None])
+        edge_y.extend([y0, y1, None])
+        edge_weights.append(graph.edges[edge]['weight'])
+
+    # Normalize edge weights for visualization (thicker lines for stronger correlations)
+    edge_weights = np.array(edge_weights)
+    edge_weights = (edge_weights - edge_weights.min()) / (edge_weights.max() - edge_weights.min())
+    edge_weights = edge_weights * 5 + 1  # Scale weights to be between 1 and 6
+
+    edge_trace = go.Scatter(
+        x=edge_x, y=edge_y,
+        line=dict(width=0.5, color='#888'),
+        hoverinfo='none',
+        mode='lines')
+
+    edge_trace.line.width = list(edge_weights)  # Apply normalized weights to line widths
+
+    # Create node traces
+    node_x = []
+    node_y = []
+    node_text = []
+    for node in graph.nodes():
+        x, y = pos[node]
+        node_x.append(x)
+        node_y.append(y)
+        node_text.append(node)
+
+    node_trace = go.Scatter(
+        x=node_x, y=node_y,
+        mode='markers+text',
+        hoverinfo='text',
+        text=node_text,
+        textposition='top center',
+        marker=dict(
+            showscale=False,
+            colorscale='YlGnBu',
+            size=20,  # Increased node size
+            line_width=2))
+
+    # Create the figure
+    fig = go.Figure(data=[edge_trace, node_trace],
+                    layout=go.Layout(
+                        title=f'<b>{title}</b>',
+                        titlefont_size=16,
+                        showlegend=False,
+                        hovermode='closest',
+                        margin=dict(b=20, l=5, r=5, t=40),
+                        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        paper_bgcolor='#1a1a1a'
+                    ))
+
+    return fig
+
 # --- Streamlit App ---
 
 def main():
@@ -641,30 +726,100 @@ def main():
 
     # --- Special Days ---
     st.markdown("### 🎉 Special Days")
+    st.markdown("#### Let's highlight your best and worst days of the year and see how your weekends stack up against your weekdays.")
     special_days = analyze_special_days(data, year)
     if special_days:
         col1, col2, col3 = st.columns(3)
-        
+
         with col1:
-            st.markdown("**Best Day**")
-            st.write(f"Date: {special_days['best_day']['date'].strftime('%Y-%m-%d')}")
-            st.write(f"Score: {special_days['best_day']['average_score']:.2f}")
+            st.markdown(
+                f"""
+                <div style='border: 2px solid #008080; border-radius: 10px; padding: 20px; margin-bottom: 20px;'>
+                    <h4 style='text-align: center; color: #008080;'>Your Best Day 🥇</h4>
+                    <div style='text-align: center;'>
+                        <p style='font-size: 1.2em; color: white; margin-top: 10px;'>
+                            <span style='font-weight: bold;'>Date:</span> {special_days['best_day']['date'].strftime('%Y-%m-%d')}
+                        </p>
+                        <p style='font-size: 1.2em; color: white;'>
+                            <span style='font-weight: bold;'>Score:</span> <span style='color: #008080; font-weight: bold;'>{special_days['best_day']['average_score']:.2f}</span>
+                        </p>
+                    </div>
+                """,
+                unsafe_allow_html=True
+            )
             if 'note' in special_days['best_day']:
-                st.write(f"Note: {special_days['best_day']['note']}")
-        
+                st.markdown(
+                    f"""
+                    <div style='text-align: center;'>
+                        <p style='color: #cccccc; font-size: 1em; font-style: italic;'>
+                            Note: {special_days['best_day']['note']}
+                        </p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+            st.markdown("</div>", unsafe_allow_html=True)
+
         with col2:
-            st.markdown("**Worst Day**")
-            st.write(f"Date: {special_days['worst_day']['date'].strftime('%Y-%m-%d')}")
-            st.write(f"Score: {special_days['worst_day']['average_score']:.2f}")
+            st.markdown(
+                f"""
+                <div style='border: 2px solid #ff6b6b; border-radius: 10px; padding: 20px; margin-bottom: 20px;'>
+                    <h4 style='text-align: center; color: #ff6b6b;'>Your Toughest Day 😢</h4>
+                    <div style='text-align: center;'>
+                        <p style='font-size: 1.2em; color: white; margin-top: 10px;'>
+                            <span style='font-weight: bold;'>Date:</span> {special_days['worst_day']['date'].strftime('%Y-%m-%d')}
+                        </p>
+                        <p style='font-size: 1.2em; color: white;'>
+                            <span style='font-weight: bold;'>Score:</span> <span style='color: #ff6b6b; font-weight: bold;'>{special_days['worst_day']['average_score']:.2f}</span>
+                        </p>
+                    </div>
+                """,
+                unsafe_allow_html=True
+            )
             if 'note' in special_days['worst_day']:
-                st.write(f"Note: {special_days['worst_day']['note']}")
-        
+                st.markdown(
+                    f"""
+                    <div style='text-align: center;'>
+                        <p style='color: #cccccc; font-size: 1em; font-style: italic;'>
+                            Note: {special_days['worst_day']['note']}
+                        </p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+            st.markdown("</div>", unsafe_allow_html=True)
+
         with col3:
-            st.markdown("**Weekend vs. Weekday Mood**")
-            st.write(f"Weekend Mood: {special_days['weekend_mood']:.2f}")
-            st.write(f"Weekday Mood: {special_days['weekday_mood']:.2f}")
+            
+            weekend_mood = special_days['weekend_mood']
+            weekday_mood = special_days['weekday_mood']
+            
+            mood_diff = weekend_mood - weekday_mood
+            arrow = "↑" if mood_diff > 0 else "↓" if mood_diff < 0 else "→"
+            arrow_color = "#008080" if mood_diff > 0 else "#ff6b6b" if mood_diff < 0 else "#ffcc66"
+
+            st.markdown(
+                f"""
+                <div style='border: 2px solid #ffcc66; border-radius: 10px; padding: 20px; margin-bottom: 20px;'>
+                    <h4 style='text-align: center; color: #ffcc66;'>Weekend vs. Weekday Mood</h4>
+                    <div style='text-align: center; margin-top: 10px;'>
+                        <p style='font-size: 1.2em; color: white;'>
+                            <span style='font-weight: bold;'>Weekend:</span> <span style='color: #ffcc66;'>{special_days['weekend_mood']:.2f}</span>
+                        </p>
+                        <p style='font-size: 1.2em; color: white;'>
+                            <span style='font-weight: bold;'>Weekday:</span> <span style='color: #ffcc66;'>{special_days['weekday_mood']:.2f}</span>
+                        </p>
+                        <p style='font-size: 1.2em; color: white; margin-top: 10px;'>
+                            <span style='font-weight: bold;'>Difference:</span> <span style='color: {arrow_color}; font-weight: bold;'>{arrow} {abs(mood_diff):.2f}</span>
+                        </p>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
     else:
-        st.write("Special days analysis not available.")
+        st.info("Special days analysis is not available.", icon="ℹ️")
 
     # --- II. Enhanced and New Visualizations ---
 
@@ -733,16 +888,30 @@ def main():
                 )
                 st.plotly_chart(radial_fig, use_container_width=True, key=f"{tag_type}_radial")
 
-    # --- Notes Section ---
-    if top_tags_and_data['notes']:
-        with st.expander("📖 A glimpse into your notes..."):
-            for note in top_tags_and_data['notes'][:5]:  # Display the first 5 notes
-                st.write(note)
+    # --- Tag Correlations ---
+    st.markdown("### 🧮 Tag Correlations")
+    tag_matrix, relevant_probs = calculate_tag_correlations(data, year)
+    if tag_matrix is not None and relevant_probs:
+        st.markdown("#### Correlation Matrix")
+        st.dataframe(tag_matrix)
+        st.markdown("#### Relevant Conditional Probabilities (>= 0.4)")
+        st.write(relevant_probs)
+
+        # --- Correlation Network Graph ---
+        st.markdown("### 🌐 Correlation Network Graph")
+        st.markdown("#### This graph visualizes the relationships between different tags. Each node represents a tag, and the edges (lines) between nodes indicate the strength of the correlation between those tags. Stronger correlations are represented by thicker lines.")
+        network_graph = create_correlation_network_graph(relevant_probs, f"Tag Correlations - {year}")
+        if network_graph:
+            st.plotly_chart(network_graph, use_container_width=True)
+        else:
+            st.write("Correlation network graph not available.")
+    else:
+        st.write("Tag correlation analysis not available.")
 
     st.markdown("---")
     st.markdown(
         """
-        **About Pixels Wrapped**: This app is inspired by the concept of a 'year in review' but tailored for your personal mood tracking data from the Pixels app.
+        **About Pixels Wrapped**: This site is complementary to Pixels, creating a Wrapped of the last year based on your mood tracking data from the Pixels app.
         It's a way to reflect on your year, understand your emotional landscape, and celebrate the journey you've had.
         """
     )
